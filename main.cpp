@@ -40,7 +40,7 @@ int main()
         glfwPollEvents();
         glClear(GL_COLOR_BUFFER_BIT); 
         app.NewFrame();  
-        app.Update(); 
+        app.ShowWindow(); 
         app.Render(); 
         glfwSwapBuffers(window);
     }
