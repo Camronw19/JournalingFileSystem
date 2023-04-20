@@ -6,8 +6,9 @@
 
 myApp::myApp()
 {
-    current_path = std::filesystem::current_path();
     showDirectoryChooser = false; 
+    showDirError = false; 
+    mInputDirectory[0] = {'\0'};
 }
 
 void myApp::Init(GLFWwindow* window, const char* glsl_version)
@@ -23,23 +24,46 @@ void myApp::Init(GLFWwindow* window, const char* glsl_version)
 
 void myApp::ShowWindow() 
 {
-    ImGuiIO& io = ImGui::GetIO();
-    ImVec2 windowSize = io.DisplaySize;
-    ImVec2 windowPos = ImVec2(0, 0);
 
-    ImGui::SetNextWindowSize(windowSize);
-    ImGui::SetNextWindowPos(windowPos);
-    ImGui::SetNextWindowContentSize(windowSize);
-
+   // Set window flags 
     ImGuiWindowFlags window_flags = 0; 
     window_flags |= ImGuiWindowFlags_MenuBar;
+    window_flags |= ImGuiWindowFlags_NoMove;
+    window_flags |= ImGuiWindowFlags_HorizontalScrollbar;
 
-    ImGui::Begin("Journal File System", nullptr, window_flags);
-    
+    ImVec2 parent_display_size = ImGui::GetIO().DisplaySize;
+
+    // Sizing 
+    static ImVec2 window1_size = ImVec2(parent_display_size.x / 2, parent_display_size.y);
+    static ImVec2 window2_size = ImVec2(parent_display_size.x / 2, parent_display_size.y);
+    static ImVec2 window2_pos = ImVec2(window1_size.x, 0);
+
+    // Toolbar
+    ImGui::SetNextWindowSize(window1_size);
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(100, parent_display_size.y), ImVec2(parent_display_size.x - 100, parent_display_size.y));
+
+    ImGui::Begin("toolbar", nullptr, window_flags);
+    window1_size = ImGui::GetWindowSize();
     ShowMenu(); 
-    DirectoryChooser(); 
-    ShowFiles(); 
+    SimpleDirectoryChooser(); 
+    ShowJournalInit(); 
+    Spacer(); 
+    ShowFileChooser(); 
+    ImGui::End();
 
+    // Update window2 position and size based on window1
+    window2_pos = ImVec2(window1_size.x, 0);
+    window2_size = ImVec2(parent_display_size.x - window1_size.x, parent_display_size.y);
+
+    // File view 
+    ImGui::SetNextWindowSize(window2_size);
+    ImGui::SetNextWindowPos(window2_pos);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(100, parent_display_size.y), ImVec2(parent_display_size.x - 100, parent_display_size.y));
+
+    ImGui::Begin("file view", nullptr, window_flags);
+    window2_size = ImGui::GetWindowSize();
+    ShowFiles(); 
     ImGui::End();
 }
 
@@ -74,7 +98,6 @@ void myApp::ShowMenu()
         {
             if(ImGui::MenuItem("Open Directory..."))
             {
-                std::cout << "Opening directory" << std::endl; 
                 showDirectoryChooser = true; 
             }
             if(ImGui::MenuItem("Select File..."))
@@ -105,6 +128,7 @@ void myApp::ShowFiles()
 {
     ImGuiWindowFlags window_flags = 0;  
     window_flags |= ImGuiWindowFlags_MenuBar;
+    window_flags |= ImGuiWindowFlags_HorizontalScrollbar;
 
     ImVec2 parentWindowSize = ImGui::GetWindowSize();
     ImVec2 childWindowSize = ImVec2(parentWindowSize.x * 0.5f - 20, parentWindowSize.y);
@@ -177,38 +201,144 @@ void myApp::DirectoryChooser() {
 
 
     entries.clear();
-    for (const auto& entry : std::filesystem::directory_iterator(current_path)) 
+    try
     {
-        if (!entry.path().filename().string().empty()) 
+        for (const auto& entry : std::filesystem::directory_iterator(mCurrentPath)) 
         {
-            entries.push_back(entry);
-        }
-    }
-
-    if (showDirectoryChooser) {
-    ImGui::Begin("Directory Chooser", &showDirectoryChooser);
-    ImGui::Text("Current Path: %s", current_path.string().c_str());
-
-    if (ImGui::BeginListBox("")) {
-        for (const auto& entry : entries) {
-            std::string filename = entry.path().filename().string();
-            if (!filename.empty() && ImGui::Selectable(filename.c_str())) {
-                if (std::filesystem::is_directory(entry)) {
-                    current_path = entry;
-                    entries.clear();
-                    for (const auto& new_entry : std::filesystem::directory_iterator(current_path)) {
-                        if (!new_entry.path().filename().string().empty()) {
-                            entries.push_back(new_entry);
-                        }
-                    }
-                } else {
-                    // Handle file selection, if necessary
-                }
+            if (!entry.path().filename().string().empty() && entry.is_directory()) 
+            {
+                entries.push_back(entry);
             }
         }
+
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+        std::cout << "Error accesing directory" << std::endl; 
+    }
+    
+
+    if (showDirectoryChooser) 
+    {
+        ImGui::Begin("Directory Chooser", &showDirectoryChooser);
+        if (ImGui::ArrowButton("##left", ImGuiDir_Left)) { mCurrentPath = mCurrentPath.parent_path(); }
+        ImGui::Text("Current Path: %s", mCurrentPath.string().c_str());
+
+        if (ImGui::BeginListBox(" ")) 
+        {
+            for (const auto& entry : entries) 
+            {
+                std::string filename = entry.path().filename().string();
+                if (!filename.empty() && ImGui::Selectable(filename.c_str())) 
+                {
+                    if (std::filesystem::is_directory(entry)) 
+                    {
+                        std::cout << entry.path(); 
+                        mCurrentPath = entry.path();
+                        entries.clear();
+                    } else 
+                    {
+                        // Handle file selection, if necessary
+                    }
+                }
+            }
+
         ImGui::EndListBox();
+        }
+        
+    ImGui::End();
+    }
+}
+
+void myApp::SimpleDirectoryChooser()
+{
+    ImGui::PushItemWidth(200); 
+    ImGui::InputTextWithHint(" ", "Enter directory path", mInputDirectory, IM_ARRAYSIZE(mInputDirectory)); 
+    ImGui::PopItemWidth(); 
+
+
+    ImGui::SameLine(); 
+
+    if (ImGui::Button("Submit"))
+    {
+        std::cout << mInputDirectory << std::endl; 
+        std::filesystem::path enteredPath(mInputDirectory);
+        memset(mInputDirectory, '\0', 128 ); 
+
+        if (std::filesystem::exists(enteredPath) && std::filesystem::is_directory(enteredPath))
+        {
+            mCurrentPath = enteredPath;
+            showDirError = false; 
+
+            //get file paths in directory
+            mFilesInDir.clear();
+            try
+            {
+                for (const auto& file : std::filesystem::directory_iterator(mCurrentPath)) 
+                {
+                    if (!file.path().filename().string().empty() && file.is_regular_file()) 
+                    {
+                        mFilesInDir.push_back(file);
+                    }
+                }
+            }
+            catch(const std::exception& e)
+            {
+                std::cerr << e.what() << '\n';
+                std::cout << "Error accesing directory" << std::endl; 
+            }
+    
+        }
+        else
+        {
+            std::cerr << "Error: The entered path is not a valid directory." << std::endl;
+            showDirError = true; 
+        }
     }
 
-    ImGui::End();
+    std::string currentDir = "Current directory: " + mCurrentPath.string(); 
+
+    if (showDirError) { ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f),  "The entered path is not a valid directory"); }
+    else { ImGui::Text("%s",currentDir.c_str()); }
 }
+
+void myApp::Spacer()
+{
+    float custom_vertical_spacing = 20.0f;
+    ImGui::Dummy(ImVec2(0.0f, custom_vertical_spacing));
+}
+
+void myApp::ShowJournalInit()
+{
+    ImGui::PushItemWidth(400); 
+    if (ImGui::Button("Add journal to directory"))
+    {
+
+    }
+
+    ImGui::PopItemWidth(); 
+
+} 
+
+void myApp::ShowFileChooser()
+{
+    ImGui::PushItemWidth(150); 
+
+    ImGui::SeparatorText("Select a file"); 
+    if (ImGui::BeginListBox(" ")) 
+    {
+        for (const auto& file : mFilesInDir) 
+        {
+            std::string filename = file.filename().string();
+            if (!filename.empty() && ImGui::Selectable(filename.c_str())) 
+            {
+                mFileContents = getFileContents(file); 
+            }
+        }
+
+    ImGui::EndListBox();
+    }
+
+    ImGui::PopItemWidth(); 
 }

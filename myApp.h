@@ -20,10 +20,14 @@ public:
 
 private: 
     bool showDirectoryChooser; 
+    bool showDirError; 
 
-    std::filesystem::path current_path;
+
+    std::filesystem::path mCurrentPath; 
     std::vector<std::filesystem::directory_entry> entries;
+    std::vector<std::filesystem::path> mFilesInDir; 
     std::vector<std::string> mFileContents;
+    char mInputDirectory[128]; 
 
     // helper methods
     std::vector<std::string> getFileContents(std::filesystem::path);
@@ -33,5 +37,8 @@ private:
     void ShowFiles(); 
     void ShowFileContent(); 
     void DirectoryChooser(); 
-
+    void SimpleDirectoryChooser(); 
+    void Spacer(); 
+    void ShowJournalInit(); 
+    void ShowFileChooser(); 
 };
