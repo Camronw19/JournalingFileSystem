@@ -46,9 +46,11 @@ namespace journalUtils
 
     std::map<std::string, std::string> reconstructJournal(const std::filesystem::path&); 
 
-    std::map<std::string, std::string> reconstructJournalFromSelectDate(const std::filesystem::path&); 
+    std::map<std::string, std::string> reconstructJournalFromSelectedDate(const std::filesystem::path&, const std::string&); 
 
     void updateJournal(const std::filesystem::path&);
+
+    std::map<std::string, std::string> getReconstructionDates(const std::filesystem::path&); 
 
     
 }

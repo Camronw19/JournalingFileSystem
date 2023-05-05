@@ -75,22 +75,16 @@ namespace journalUtils
 
     void createNewJournal(const std::filesystem::path& file)
     {
-            std::cout  << "Creating new journal" << std::endl; 
-
             std::string fileName = file.filename().string(); 
             std::string journalName = fileName + "_journal.DAT"; 
-            std::cout << "Journal name " + journalName << std::endl; 
-
-
             std::string journalDirectory = ".journals"; 
             std::filesystem::path journalDirPath = file.parent_path() / journalDirectory; 
-
             std::filesystem::path newFile = journalDirPath / journalName; 
 
             std::ofstream outfile(newFile); 
-            if (outfile.is_open())
+            if (!outfile.is_open())
             {
-                std::cout << "file created successfully" << std::endl; 
+                std::cerr << "file journal not created: " << fileName << std::endl; 
             }
             outfile.close(); 
     }
@@ -126,15 +120,10 @@ namespace journalUtils
     bool fileHasJournal(const std::filesystem::path& filePath)
     {
         if(std::filesystem::exists(getJournalPath(filePath)))
-        {
             return true; 
-        } 
         else
-        {
             return false; 
-        }
     }
-
 
     void createJournalDirectory(const std::filesystem::path& watchedDirectory)
     {
@@ -144,7 +133,7 @@ namespace journalUtils
         std::filesystem::create_directory(dirPath); 
         if (!std::filesystem::is_directory(dirPath))
         {
-            std::cout << "Error: Failed to create directory" << std::endl; 
+            std::cerr << "Error: Failed to create directory" << std::endl; 
         }
     }
 
@@ -156,12 +145,8 @@ namespace journalUtils
         for (const auto& dir : std::filesystem::directory_iterator(watchedDirectory))
         {
             if (dir.is_directory() && dir.path().filename() == journalDirectory)
-            {
-                std::cout << "journal dir already created" << std::endl; 
                 return true; 
-            }
         }
-        std::cout << "creating journal dir" << std::endl; 
         return false; 
     }
 
@@ -171,7 +156,7 @@ namespace journalUtils
         
         if(!journal) 
         {
-            std::cout << "Failed to open journal: " << journalPath << std::endl; 
+            std::cerr << "Failed to open journal: " << journalPath << std::endl; 
             return std::map<std::string, std::string>(); 
         }
 
@@ -200,20 +185,78 @@ namespace journalUtils
         return file; 
     }
 
-    std::map<std::string, std::string> reconstructJournalFromSelectDate(const std::filesystem::path& filePath)
+    std::map<std::string, std::string> reconstructJournalFromSelectedDate(const std::filesystem::path& filePath, const std::string& lineNumber)
+    {
+        //resconstruct the file
+        std::filesystem::path journalPath = getJournalPath(filePath);  
+        std::ifstream journal(journalPath); 
+
+          if(!journal) 
+        {
+            std::cerr << "Failed to open journal: " << journalPath << std::endl; 
+            return std::map<std::string, std::string>(); 
+        }
+
+        std::map<std::string, std::string> rFile; 
+        std::map<std::string, std::string>::iterator it; 
+        std::string journalLine; 
+        
+        while (getline(journal, journalLine))
+        {
+            std::optional<Transaction> t = buildTransactionFromLine(journalLine); 
+
+            if (t.has_value())
+            {
+                if (t->modType == '+')
+                {
+                    rFile[t->lineNumber] = t->lineContent; 
+                }
+                else if (t->modType == '-')
+                {
+                    it = rFile.find(t->lineNumber); 
+                    rFile.erase(it); 
+                }
+            }
+            
+            if (t->lineNumber == lineNumber)
+            {
+                break; 
+            }
+        }
+
+        journal.close(); 
+
+        //overrite file contents 
+        std::ofstream oFile;
+        oFile.open(filePath, std::ios::out);
+
+        if (!oFile.is_open()) 
+        {
+            std::cerr << "Failed to open the file!" << std::endl;
+        }
+
+        for (const auto& line : rFile)
+        {
+            oFile << line.second << std::endl; 
+        }
+
+        oFile.close();
+        return rFile; 
+    } 
+
+    std::map<std::string, std::string> getReconstructionDates(const std::filesystem::path& filePath)
     {
         std::filesystem::path journalPath = getJournalPath(filePath); 
         std::ifstream journal(journalPath);
         
         if(!journal) 
         {
-            std::cout << "Failed to open journal: " << journalPath << std::endl; 
+            std::cerr << "Failed to open journal: " << journalPath << std::endl; 
             return std::map<std::string, std::string>(); 
         }
 
         std::string journalLine; 
         std::map<std::string, std::string> dates;  
-        std::map<std::string, std::string>::iterator it; 
         
         // Get dates that the journal can be restored from
         while (getline(journal, journalLine))
@@ -232,105 +275,14 @@ namespace journalUtils
                 if (!found) 
                 {
                     dates[t->lineNumber] = t->timeStamp; 
-                }
+                } 
             }
         }
 
         journal.close(); 
+        return dates; 
+    }
 
-        // Get user input for date to restore to 
-        if (dates.empty())
-            std::cout << "No previous versions to restore from" << std::endl; 
-        else
-        {        
-            std::cout << "Select a date to restore the journal from: " << std::endl; 
-            for (const auto& date : dates)
-            {
-                std::cout << date.second <<  std::endl; 
-            }
-        }
-
-        //get date to restore from
-        bool matchFound = false; 
-        while (!matchFound)
-        {
-            std::string selectDate;
-
-            std::getline(std::cin, selectDate); 
-
-            for (it = dates.begin(); it != dates.end(); ++it) 
-            {
-                if (selectDate == it->second) 
-                {
-                    ++it; 
-                    matchFound = true;
-                    break;
-                }
-            }
-
-            if (!matchFound)
-            {
-                std::cout << "Invalid entry, please enter a valid date" << std::endl; 
-            }
-                
-        }
-        
-
-        //restore the file 
-        std::string lineNumber = it->first; 
-        std::map<std::string, std::string> rFile; 
-        journal.open(journalPath);  
-
-          if(!journal) 
-        {
-            std::cout << "Failed to open journal: " << journalPath << std::endl; 
-            return std::map<std::string, std::string>(); 
-        }
-
-        while (getline(journal, journalLine))
-        {
-            std::optional<Transaction> t = buildTransactionFromLine(journalLine); 
-
-            if (t.has_value() && t->lineNumber != lineNumber)
-            {
-                if (t->modType == '+')
-                {
-                    rFile[t->lineNumber] = t->lineContent; 
-                }
-                else if (t->modType == '-')
-                {
-                    it = rFile.find(t->lineNumber); 
-                    rFile.erase(it); 
-                }
-            }
-            else if (t->lineNumber == lineNumber)
-            {
-                break; 
-            }
-        }
-
-        journal.close(); 
-
-        //overrite file contents 
-
-        std::ofstream oFile;
-        oFile.open(filePath, std::ios::out);
-
-        if (!oFile.is_open()) {
-            std::cerr << "Failed to open the file!" << std::endl;
-        }
-
-        for (const auto& line : rFile)
-        {
-            oFile << line.second << std::endl; 
-        }
-
-        oFile.close();
-        std::cout << "Journal restored succesfully" << std::endl; 
-
-        //return the file as a vector of strings or map from line number to string
-        return rFile; 
-    } 
 
     void updateJournal(const std::filesystem::path& path)
     {
@@ -346,11 +298,10 @@ namespace journalUtils
 
         if(!file) 
         {
-            std::cout << "Failed to open file: " << filePath << std::endl;
+            std::cerr << "Failed to open file: " << filePath << std::endl;
             return; 
         }
 
-        std::cout << "Writing differences to journal" << std::endl; 
         std::string fileLine; 
         std::string journalLine; 
 
@@ -390,7 +341,7 @@ namespace journalUtils
 
         if (!journal.is_open())
         {
-            std::cout << "Unable to open journal for writing" <<  std::endl;
+            std::cerr << "Unable to open journal for writing" <<  std::endl;
         }    
         else
         {

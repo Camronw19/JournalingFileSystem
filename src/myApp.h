@@ -10,7 +10,6 @@
 #include <filesystem>
 #include <thread> 
 #include <set>
-#include <atomic>
 #include <mutex> 
 
 class myApp {
@@ -18,6 +17,7 @@ public:
 
     myApp(); 
     ~myApp(); 
+
     void Init(GLFWwindow*, const char*); 
     virtual void ShowWindow(); 
     void Render(); 
@@ -26,32 +26,42 @@ public:
     void stopNotifierThreads(); 
 
 private: 
-    bool showDirectoryChooser; 
-    bool showDirError; 
+    bool mShowDirError; 
 
+    // inotify 
     std::vector<std::thread> mNotifierThreads; 
     std::vector<std::shared_ptr<decltype(inotify::BuildNotifier())>> mNotifiers;
     std::mutex mNotifiersMutex;
     std::set<std::filesystem::path> mWatchedDirectories; 
 
+    // Current Directory 
     std::filesystem::path mCurrentDirPath; 
-    std::vector<std::filesystem::directory_entry> mEntries;
     std::vector<std::filesystem::path> mFilesInDir; 
+    std::vector<std::filesystem::directory_entry> mEntries;
+
+    // Current File
+    std::filesystem::path mCurrentFile; 
     std::vector<std::string> mFileContents;
+    std::vector<std::string> mJournalContents;
+    std::map<std::string, std::string> mReconstructionDates;
+    std::string mReconstructionLineNum;  
     char mInputDirectory[128]; 
+
 
     // helper methods
     std::vector<std::string> getFileContents(std::filesystem::path);
+    void setFileContents(); 
+    void getFilesInDirectory(); 
+    bool isRegularFile(const std::filesystem::directory_entry&); 
 
     // components 
-    void ShowMenu(); 
-    void ShowFiles(); 
-    void ShowFileContent(); 
-    void DirectoryChooser(); 
-    void SimpleDirectoryChooser(); 
-    void Spacer(); 
+    void ShowDirectoryChooser(); 
     void ShowJournalInit(); 
     void ShowFileChooser();
+    void ShowJournalReconstruction(); 
+    void ShowFiles(); 
+    void ShowFileContent(const std::vector<std::string>&); 
+    void Spacer(); 
 
     // inotify  
     void addInotifyWatch(); 
