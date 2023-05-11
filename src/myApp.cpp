@@ -226,7 +226,15 @@ void myApp::ShowJournalInit()
         journalUtils::initilizeDirectory(mCurrentDirPath); 
         if(mWatchedDirectories.find(mCurrentDirPath) == mWatchedDirectories.end())
         {
-            addInotifyWatch(); 
+           try
+            {
+                addInotifyWatch(); 
+            }
+            catch (const std::exception& e)
+            {
+                std::cout << "Exception occurred while adding Inotify watch: " << e.what() << std::endl;
+                // Handle the exception or display an error message as needed.
+            }
         }
         else
         {
